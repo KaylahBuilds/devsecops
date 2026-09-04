@@ -1,5 +1,9 @@
+# Only knobs that genuinely vary per environment live here — fixed posture
+# choices (DNS on, no auto public IPs, ALL-traffic flow logs) are locals in
+# main.tf so tfvars files stay small and can't weaken them.
+
 # ---------------------------------------------------------------------------
-# Identity / naming
+# Identity
 # ---------------------------------------------------------------------------
 
 variable "project" {
@@ -36,7 +40,7 @@ variable "extra_tags" {
 }
 
 # ---------------------------------------------------------------------------
-# Network topology
+# Network
 # ---------------------------------------------------------------------------
 
 variable "vpc_cidr" {
@@ -77,34 +81,6 @@ variable "subnet_newbits" {
   }
 }
 
-variable "enable_dns_support" {
-  description = "Enable DNS resolution inside the VPC"
-  type        = bool
-  default     = true
-}
-
-variable "enable_dns_hostnames" {
-  description = "Assign DNS hostnames to instances in the VPC"
-  type        = bool
-  default     = true
-}
-
-variable "map_public_ip_on_launch" {
-  description = "Auto-assign public IPs in public subnets (keep false; Prowler flags it on)"
-  type        = bool
-  default     = false
-}
-
-variable "internet_egress_cidr" {
-  description = "Destination CIDR for default routes to the IGW/NAT"
-  type        = string
-  default     = "0.0.0.0/0"
-}
-
-# ---------------------------------------------------------------------------
-# NAT
-# ---------------------------------------------------------------------------
-
 variable "enable_nat_gateway" {
   description = "Provision NAT for private-subnet egress (costs ~$32/mo per gateway)"
   type        = bool
@@ -118,24 +94,13 @@ variable "one_nat_gateway_per_az" {
 }
 
 # ---------------------------------------------------------------------------
-# VPC flow logs
+# Flow logs
 # ---------------------------------------------------------------------------
 
 variable "enable_flow_logs" {
   description = "Enable VPC flow logs to CloudWatch (recommended — Prowler will flag it off)"
   type        = bool
   default     = true
-}
-
-variable "flow_log_traffic_type" {
-  description = "Which traffic to capture in flow logs"
-  type        = string
-  default     = "ALL"
-
-  validation {
-    condition     = contains(["ALL", "ACCEPT", "REJECT"], var.flow_log_traffic_type)
-    error_message = "flow_log_traffic_type must be ALL, ACCEPT, or REJECT."
-  }
 }
 
 variable "flow_log_retention_days" {
@@ -146,16 +111,5 @@ variable "flow_log_retention_days" {
   validation {
     condition = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.flow_log_retention_days)
     error_message = "flow_log_retention_days must be a valid CloudWatch retention value."
-  }
-}
-
-variable "flow_log_aggregation_interval" {
-  description = "Max interval (seconds) for aggregating flow log records"
-  type        = number
-  default     = 60
-
-  validation {
-    condition     = contains([60, 600], var.flow_log_aggregation_interval)
-    error_message = "flow_log_aggregation_interval must be 60 or 600."
   }
 }
