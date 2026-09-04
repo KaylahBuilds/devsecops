@@ -1,0 +1,109 @@
+name: Security Scans
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC — weekly posture check
+  workflow_dispatch:
+    inputs:
+      run_nodezero:
+        description: "Also trigger a Horizon3.ai NodeZero pentest"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Prowler — CSPM scan of the AWS account (SecurityAudit + ViewOnly role)
+  # -------------------------------------------------------------------------
+  prowler:
+    name: Prowler AWS scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Harden runner (StepSecurity)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Configure AWS credentials (Prowler audit role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PROWLER_ROLE_ARN }}
+          aws-region: us-east-1
+          role-duration-seconds: 3600
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Prowler
+        run: pip install prowler
+
+      - name: Run Prowler
+        # -z: don't fail the job just because findings exist (exit code 3);
+        # review the report artifact instead. Drop -z once the account is clean
+        # if you want findings to break the build.
+        run: |
+          prowler aws -z \
+            --output-formats csv json-ocsf html \
+            --output-directory prowler-output
+
+      - name: Upload Prowler report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prowler-report-${{ github.run_id }}
+          path: prowler-output/
+          retention-days: 30
+
+  # -------------------------------------------------------------------------
+  # Horizon3.ai NodeZero — autonomous pentest, manual trigger only.
+  #
+  # Prereqs (see README):
+  #   - NodeZero account + API key stored as the H3_API_KEY repo secret
+  #   - A pentest template configured in the NodeZero portal; internal
+  #     pentests additionally need a NodeZero runner deployed inside the
+  #     target network (this GitHub runner only *triggers* the op).
+  #   - Written authorization to test the target environment.
+  # -------------------------------------------------------------------------
+  nodezero:
+    name: NodeZero pentest trigger
+    if: github.event_name == 'workflow_dispatch' && inputs.run_nodezero
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Harden runner (StepSecurity)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Check secret is configured
+        env:
+          H3_API_KEY: ${{ secrets.H3_API_KEY }}
+        run: |
+          if [ -z "$H3_API_KEY" ]; then
+            echo "::error::H3_API_KEY secret is not set — add your NodeZero API key in repo settings."
+            exit 1
+          fi
+
+      - name: Install h3-cli
+        run: |
+          git clone --depth 1 https://github.com/horizon3ai/h3-cli "$HOME/h3-cli"
+
+      - name: Trigger pentest
+        env:
+          H3_API_KEY: ${{ secrets.H3_API_KEY }}
+        run: |
+          bash "$HOME/h3-cli/install.sh" "$H3_API_KEY"
+          export PATH="$HOME/h3-cli/bin:$PATH"
+          h3 checkenv
+          # Runs a pentest from your default/most-recent template. To pin a
+          # specific op template, pass its name: h3 run_pentest "<template-name>"
+          # (verify command syntax against https://github.com/horizon3ai/h3-cli)
+          h3 run_pentest

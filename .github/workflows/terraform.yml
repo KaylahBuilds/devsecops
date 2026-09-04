@@ -1,0 +1,188 @@
+name: Terraform
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environment to apply"
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.9.8"
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "true"
+
+jobs:
+  # -------------------------------------------------------------------------
+  # PR gate: fmt + validate + plan for every environment, plan posted to the PR.
+  # Branch protection requires these checks before merge to main.
+  # -------------------------------------------------------------------------
+  plan:
+    name: "Terraform Plan (${{ matrix.env }})"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # OIDC → AWS, no stored keys
+      pull-requests: write   # plan comment
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, prod]
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Harden runner (StepSecurity)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit   # tighten to `block` + allowed-endpoints once the audit log stabilizes
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (plan role, read-only)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init -backend-config="key=${{ matrix.env }}/terraform.tfstate"
+
+      - name: Terraform validate
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        id: plan
+        run: |
+          terraform plan -no-color -input=false \
+            -var-file="envs/${{ matrix.env }}.tfvars" \
+            -out="${{ matrix.env }}.tfplan" 2>&1 | tee plan.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Comment plan on PR
+        if: always() && steps.plan.outcome != 'skipped'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const envName = '${{ matrix.env }}';
+            const outcome = '${{ steps.plan.outcome }}';
+            let plan = 'Plan step did not produce output.';
+            try {
+              plan = fs.readFileSync('terraform/plan.log', 'utf8');
+            } catch (e) {}
+            if (plan.length > 60000) {
+              plan = plan.slice(0, 60000) + '\n... (truncated — see workflow logs)';
+            }
+            const marker = `<!-- tf-plan-${envName} -->`;
+            const body = [
+              marker,
+              `### Terraform plan — \`${envName}\` ${outcome === 'success' ? '✅' : '❌'}`,
+              '<details><summary>Show plan</summary>',
+              '',
+              '```hcl',
+              plan,
+              '```',
+              '</details>',
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  # -------------------------------------------------------------------------
+  # Deploy: push to main auto-applies dev; prod applies only via manual
+  # dispatch, and the `prod` GitHub environment should require reviewers.
+  # -------------------------------------------------------------------------
+  apply:
+    name: "Terraform Apply (${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }})"
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      TARGET_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'dev' }}
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - name: Harden runner (StepSecurity)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (apply role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        run: terraform init -backend-config="key=${TARGET_ENV}/terraform.tfstate"
+
+      - name: Terraform plan
+        run: |
+          terraform plan -no-color -input=false \
+            -var-file="envs/${TARGET_ENV}.tfvars" \
+            -out="${TARGET_ENV}.tfplan"
+
+      - name: Terraform apply
+        run: terraform apply -no-color -input=false "${TARGET_ENV}.tfplan"

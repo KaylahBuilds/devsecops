@@ -1,0 +1,23 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraform.lock.hcl.bak
+
+# Sensitive variable files (envs/*.tfvars are intentionally committed — no secrets in them)
+*.auto.tfvars
+secrets.tfvars
+
+# Scan output
+prowler-output/
+output/
+
+# Editor
+.vscode/
+.idea/
