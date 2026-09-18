@@ -12,8 +12,12 @@ bootstrap/            One-time local apply: state backend + GitHub OIDC + CI rol
 terraform/            Root module — core VPC/network, all variables-driven
   envs/dev.tfvars     Per-environment inputs
   envs/prod.tfvars
+stepsecurity/         Root module — StepSecurity tenant config (egress policies,
+                      run policies, PR checks, notifications, remediation PRs)
+                      for every GitHub org/repo, driven by one terraform.tfvars
 .github/workflows/
   terraform.yml       PR → fmt/validate/plan (dev+prod, commented on PR); main → apply
+  stepsecurity.yml    Same gate for stepsecurity/; apply behind the `stepsecurity` environment
   security-scan.yml   Weekly Prowler scan; manual NodeZero trigger
 ```
 
@@ -53,6 +57,9 @@ Then copy the outputs:
 | `AWS_APPLY_ROLE_ARN` | `apply_role_arn` output |
 | `AWS_PROWLER_ROLE_ARN` | `prowler_role_arn` output |
 | `H3_API_KEY` | NodeZero API key from the Horizon3.ai portal (optional until you use it) |
+| `STEP_SECURITY_API_KEY` | StepSecurity API key (dashboard → Settings → API keys) — for `stepsecurity/` |
+| `STEP_SECURITY_CUSTOMER` | StepSecurity tenant name — for `stepsecurity/` |
+| `STEPSECURITY_NOTIFICATION_WEBHOOKS` | Optional HCL map of per-org Slack/Teams webhooks (see `stepsecurity/README.md`) |
 
 ### 2. Branch protection
 
