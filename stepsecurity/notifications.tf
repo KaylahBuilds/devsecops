@@ -1,9 +1,8 @@
-# Org notification settings: where alerts go and which events fire.
-# Webhook URLs are read from the sensitive var.notification_webhooks map so
-# they never appear in terraform.tfvars.
+# Org notification settings. Webhook URLs come from the sensitive
+# var.notification_webhooks map so they never appear in terraform.tfvars.
 
 resource "stepsecurity_github_org_notification_settings" "this" {
-  for_each = local.notifications
+  for_each = var.notifications
 
   owner = each.key
 
@@ -16,6 +15,5 @@ resource "stepsecurity_github_org_notification_settings" "this" {
   }
 
   notification_events = merge(var.default_notification_events, each.value.events)
-
-  threat_intel = each.value.threat_intel
+  threat_intel        = each.value.threat_intel
 }
