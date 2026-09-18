@@ -1,0 +1,179 @@
+name: StepSecurity Config
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "stepsecurity/**"
+      - ".github/workflows/stepsecurity.yml"
+  push:
+    branches: [main]
+    paths:
+      - "stepsecurity/**"
+      - ".github/workflows/stepsecurity.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stepsecurity-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_VERSION: "1.9.8"
+  AWS_REGION: us-east-1
+  TF_IN_AUTOMATION: "true"
+  # State lives in the same bucket as the AWS state. One tenant per workflow;
+  # for a second tenant, duplicate this workflow with a different key.
+  TF_STATE_KEY: stepsecurity/terraform.tfstate
+
+jobs:
+  # -------------------------------------------------------------------------
+  # PR gate: fmt + validate + plan, plan posted to the PR.
+  # -------------------------------------------------------------------------
+  plan:
+    name: "StepSecurity Plan"
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write        # OIDC → AWS for state access only
+      pull-requests: write   # plan comment
+    defaults:
+      run:
+        working-directory: stepsecurity
+
+    steps:
+      - name: Harden runner (StepSecurity)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (plan role, state read)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init -backend-config="key=${TF_STATE_KEY}"
+
+      - name: Terraform validate
+        run: terraform validate -no-color
+
+      - name: Terraform plan
+        id: plan
+        env:
+          STEP_SECURITY_API_KEY: ${{ secrets.STEP_SECURITY_API_KEY }}
+          STEP_SECURITY_CUSTOMER: ${{ secrets.STEP_SECURITY_CUSTOMER }}
+          TF_VAR_notification_webhooks: ${{ secrets.STEPSECURITY_NOTIFICATION_WEBHOOKS }}
+        run: |
+          terraform plan -no-color -input=false -out=stepsecurity.tfplan 2>&1 | tee plan.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Comment plan on PR
+        if: always() && steps.plan.outcome != 'skipped'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const outcome = '${{ steps.plan.outcome }}';
+            let plan = 'Plan step did not produce output.';
+            try {
+              plan = fs.readFileSync('stepsecurity/plan.log', 'utf8');
+            } catch (e) {}
+            if (plan.length > 60000) {
+              plan = plan.slice(0, 60000) + '\n... (truncated — see workflow logs)';
+            }
+            const marker = '<!-- tf-plan-stepsecurity -->';
+            const body = [
+              marker,
+              `### StepSecurity plan ${outcome === 'success' ? '✅' : '❌'}`,
+              '<details><summary>Show plan</summary>',
+              '',
+              '```hcl',
+              plan,
+              '```',
+              '</details>',
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+  # -------------------------------------------------------------------------
+  # Apply on merge to main (or manual dispatch), behind the `stepsecurity`
+  # GitHub environment — add required reviewers there.
+  # -------------------------------------------------------------------------
+  apply:
+    name: "StepSecurity Apply"
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: stepsecurity
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: stepsecurity
+
+    steps:
+      - name: Harden runner (StepSecurity)
+        uses: step-security/harden-runner@v2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (apply role)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_APPLY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Terraform init
+        run: terraform init -backend-config="key=${TF_STATE_KEY}"
+
+      - name: Terraform apply
+        env:
+          STEP_SECURITY_API_KEY: ${{ secrets.STEP_SECURITY_API_KEY }}
+          STEP_SECURITY_CUSTOMER: ${{ secrets.STEP_SECURITY_CUSTOMER }}
+          TF_VAR_notification_webhooks: ${{ secrets.STEPSECURITY_NOTIFICATION_WEBHOOKS }}
+        run: |
+          terraform plan -no-color -input=false -out=stepsecurity.tfplan
+          terraform apply -no-color -input=false stepsecurity.tfplan
