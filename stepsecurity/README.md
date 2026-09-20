@@ -9,6 +9,9 @@ Design rule: **no loops, no locals.** Each resource type is one flat map
 variable and one `for_each`. Every entry names its org (`owner`), or is keyed
 by org for per-org settings. Reading a `.tf` file is reading the provider docs.
 
+Operating procedures, SAST/DAST positioning, GitHub Advanced Security and
+Woodpecker CI notes are in [RUNBOOK.md](RUNBOOK.md).
+
 ## Layout
 
 ```

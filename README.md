@@ -13,6 +13,7 @@ terraform/            Root module — core VPC/network, all variables-driven
   envs/dev.tfvars     Per-environment inputs
   envs/prod.tfvars
 stepsecurity/         Root module — StepSecurity tenant config (egress policies,
+                      RUNBOOK.md: operating procedures, SAST/DAST, GHAS, Woodpecker
                       run policies, PR checks, notifications, remediation PRs)
                       for every GitHub org/repo, driven by one terraform.tfvars
 .github/workflows/
