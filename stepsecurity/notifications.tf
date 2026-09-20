@@ -7,13 +7,13 @@ resource "stepsecurity_github_org_notification_settings" "this" {
   owner = each.key
 
   notification_channels = {
-    email                     = each.value.email != null ? each.value.email : var.default_notification_email
+    email                     = try(each.value.email, var.default_notification_email)
     slack_webhook_url         = try(var.notification_webhooks[each.key].slack_webhook_url, null)
     teams_webhook_url         = try(var.notification_webhooks[each.key].teams_webhook_url, null)
-    slack_channel_id          = each.value.slack_channel_id
-    slack_notification_method = each.value.slack_channel_id != null ? "oauth" : null
+    slack_channel_id          = try(each.value.slack_channel_id, null)
+    slack_notification_method = try(each.value.slack_channel_id, null) != null ? "oauth" : null
   }
 
-  notification_events = merge(var.default_notification_events, each.value.events)
-  threat_intel        = each.value.threat_intel
+  notification_events = merge(var.default_notification_events, try(each.value.events, {}))
+  threat_intel        = try(each.value.threat_intel, null)
 }

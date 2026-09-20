@@ -39,7 +39,7 @@ variable "default_egress_policy" {
 
 variable "base_allowed_endpoints" {
   description = "host:port endpoints every GitHub-hosted job needs. Prepended to each egress policy's allowed_endpoints."
-  type        = list(string)
+  type        = any
   default = [
     "github.com:443",
     "api.github.com:443",
@@ -58,23 +58,17 @@ variable "default_check_controls" {
   description = <<-EOT
     Controls used by any `checks` entry that doesn't list its own. Names as
     StepSecurity spells them: "NPM Package Cooldown", "PyPI Package Cooldown",
-    "Maven Package Cooldown", "NuGet Package Cooldown", "Compromised Updates",
-    "PWN Request", "Script Injection".
+    "Maven Package Cooldown", "NuGet Package Cooldown",
+    "NPM|PyPI|Maven|NuGet Package Compromised Updates", "PWN Request", "Script Injection".
+    Every control needs control, enable and type (required | optional); the cooldown
+    controls also take settings = { cool_down_period, packages_to_exempt_in_cooldown_check }.
   EOT
-  type = list(object({
-    control = string
-    enable  = optional(bool, true)
-    type    = optional(string, "required") # required | optional
-    settings = optional(object({
-      cool_down_period                     = optional(number)
-      packages_to_exempt_in_cooldown_check = optional(list(string))
-    }))
-  }))
+  type        = any
   default = [
-    { control = "NPM Package Cooldown", settings = { cool_down_period = 3 } },
-    { control = "PyPI Package Cooldown", settings = { cool_down_period = 3 } },
-    { control = "PWN Request" },
-    { control = "Script Injection", type = "optional" },
+    { control = "NPM Package Cooldown", enable = true, type = "required", settings = { cool_down_period = 3 } },
+    { control = "PyPI Package Cooldown", enable = true, type = "required", settings = { cool_down_period = 3 } },
+    { control = "PWN Request", enable = true, type = "required" },
+    { control = "Script Injection", enable = true, type = "optional" },
   ]
 }
 
@@ -88,7 +82,7 @@ variable "default_notification_email" {
 
 variable "default_notification_events" {
   description = "Event → on/off baseline; a notifications entry's `events` map is merged over this."
-  type        = map(bool)
+  type        = any
   default = {
     domain_blocked                        = true
     file_overwrite                        = true
@@ -112,10 +106,7 @@ variable "default_notification_events" {
 
 variable "notification_webhooks" {
   description = "Per-org Slack/Teams webhook URLs, keyed by org. Supply via git-ignored secrets.auto.tfvars or TF_VAR_notification_webhooks."
-  type = map(object({
-    slack_webhook_url = optional(string)
-    teams_webhook_url = optional(string)
-  }))
-  default   = {}
-  sensitive = true
+  type        = any
+  default     = {}
+  sensitive   = true
 }

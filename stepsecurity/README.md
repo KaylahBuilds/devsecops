@@ -5,9 +5,11 @@ org, repo and policy — from one `terraform.tfvars`. Uses the official
 [`step-security/stepsecurity`](https://github.com/step-security/terraform-provider-stepsecurity)
 provider.
 
-Design rule: **no loops, no locals.** Each resource type is one flat map
-variable and one `for_each`. Every entry names its org (`owner`), or is keyed
-by org for per-org settings. Reading a `.tf` file is reading the provider docs.
+Design rule: **no loops, no locals, no type declarations.** Each resource
+type is one flat map variable (`type = any`) and one `for_each`; the fields an
+entry accepts are shown as a plain example above each variable in `inputs.tf`.
+Every entry names its org (`owner`), or is keyed by org for per-org settings.
+Reading a `.tf` file is reading the provider docs.
 
 Operating procedures, SAST/DAST positioning, GitHub Advanced Security and
 Woodpecker CI notes are in [RUNBOOK.md](RUNBOOK.md).
@@ -17,7 +19,7 @@ Woodpecker CI notes are in [RUNBOOK.md](RUNBOOK.md).
 ```
 variables.tf      Tenant-wide settings + defaults (auth, base egress endpoints,
                   default check controls, default notification events, webhooks)
-inputs.tf         One typed map variable per resource type — the shape of your config
+inputs.tf         One map variable per resource type, with a full example entry in the comment
 terraform.tfvars  Your orgs and policies — the only file you edit day to day
 
 policy_store.tf   egress_policies, egress_policy_attachments
@@ -124,8 +126,10 @@ terraform apply
 ```
 
 Input mistakes (an egress mode that isn't audit/block, a wildcard repo pattern
-without workflows, a network-call suppression without `process`, ...) are
-rejected by the provider at `plan` time with a message naming the entry.
+without workflows, a network-call suppression without `process`, a control
+without `enable`/`type`, ...) are rejected by the provider at `plan` time with
+a message naming the entry. A misspelled optional field is silently ignored,
+so compare new entries against the example in `inputs.tf`.
 
 ## Multiple tenants
 
