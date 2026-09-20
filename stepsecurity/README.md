@@ -9,6 +9,14 @@ Design rule: **no loops, no locals.** Each resource type is one flat map
 variable and one `for_each`. Every entry names its org (`owner`), or is keyed
 by org for per-org settings. Reading a `.tf` file is reading the provider docs.
 
+## Examples
+
+`examples/` holds seven working, line-by-line commented scenarios, from a
+one-org audit setup to a three-org tenant with enforcement, plus a secrets
+template and import blocks. Start with `examples/README.md`. On this branch
+every module file is commented line by line as well, with optional settings
+shown as commented-out lines.
+
 ## Layout
 
 ```

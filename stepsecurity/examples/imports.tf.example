@@ -1,0 +1,54 @@
+# =============================================================================
+# imports.tf.example - adopting StepSecurity config that already exists
+# =============================================================================
+# StepSecurity keeps working even if a policy was created in the dashboard
+# before Terraform managed it. To take one over without recreating it:
+#   1. describe it in terraform.tfvars (or an example file) under a map key
+#   2. copy this file to stepsecurity/imports.tf and keep only the blocks you need
+#   3. run `terraform plan` until it shows "no changes" for the imported address
+#   4. run `terraform apply`, then delete imports.tf (the state now holds it)
+# Every block below is commented out; uncomment and edit the id.
+# Resource addresses are `<type>.this["<map key>"]` - the same keys as the
+# tfvars map the resource is fed from. Keys shown come from 01-minimal.tfvars
+# (the run policy key is illustrative; 01 sets run_policies = {}).
+
+# --- Harden-Runner egress policy (policy store) ------------------------------
+# import {                                                       # one block per policy
+#   to = stepsecurity_github_policy_store.this["acme-baseline"]  # map key from egress_policies
+#   id = "acme-corp:::acme-baseline"                             # "<org>:::<policy name>" (three colons)
+# }
+
+# --- Where that policy is attached -------------------------------------------
+# import {                                                                  # the attachment is a separate resource
+#   to = stepsecurity_github_policy_store_attachment.this["acme-baseline"]  # same key as the policy
+#   id = "acme-corp:::acme-baseline"                                        # same ID format as the policy
+# }
+
+# --- Run policy ---------------------------------------------------------------
+# import {                                                       # the ID needs the server-generated policy_id:
+#   to = stepsecurity_github_run_policy.this["acme-pin-actions"] # map key from run_policies
+#   id = "acme-corp/POLICY_ID"                                   # "<org>/<policy_id>" - find policy_id in the dashboard
+# }                                                              # or via the stepsecurity_github_run_policies data source
+
+# --- Per-org singletons: the ID is just the org name --------------------------
+# import {                                                   # PR checks
+#   to = stepsecurity_github_checks.this["acme-corp"]        # keyed by org
+#   id = "acme-corp"                                         # "<org>"
+# }
+# import {                                                                 # notification settings
+#   to = stepsecurity_github_org_notification_settings.this["acme-corp"]   # keyed by org
+#   id = "acme-corp"                                                       # "<org>"
+# }
+# import {                                                   # policy-driven PR settings
+#   to = stepsecurity_policy_driven_pr.this["acme-corp"]     # keyed by org
+#   id = "acme-corp"                                         # "<org>"
+# }
+# import {                                                   # PR template
+#   to = stepsecurity_github_pr_template.this["acme-corp"]   # keyed by org
+#   id = "acme-corp"                                         # "<org>"
+# }
+
+# --- Suppression rules ---------------------------------------------------------
+# The provider v0.0.44 documentation does not describe an import ID format for
+# stepsecurity_github_supression_rule. Recreate rules through Terraform instead
+# (they are cheap), or check the provider docs for a newer version.
