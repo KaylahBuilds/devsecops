@@ -113,7 +113,7 @@ variable "default_egress_policy" {
 # Format: "host:port"; "*" wildcards are allowed in the host part.
 variable "base_allowed_endpoints" {
   description = "host:port endpoints every GitHub-hosted job needs. Prepended to each egress policy's allowed_endpoints." # help text
-  type        = list(string)                                                                                              # ordered list; distinct() drops duplicates with an entry's own allowed_endpoints
+  type        = any                                                                                                       # a plain list of "host:port" strings
   # One entry per line; the trailing comment says which build step needs it.
   default = [                                             # the GitHub endpoints a hosted job needs to check out code, fetch actions and report results
     "github.com:443",                                     # git clone/fetch/push (actions/checkout), the gh CLI, downloads from release pages
@@ -157,27 +157,21 @@ variable "default_check_controls" {
   description = <<-EOT
     Controls used by any `checks` entry that doesn't list its own. Names as
     StepSecurity spells them: "NPM Package Cooldown", "PyPI Package Cooldown",
-    "Maven Package Cooldown", "NuGet Package Cooldown", "Compromised Updates",
-    "PWN Request", "Script Injection".
+    "Maven Package Cooldown", "NuGet Package Cooldown",
+    "NPM|PyPI|Maven|NuGet Package Compromised Updates", "PWN Request", "Script Injection".
+    Every control needs control, enable and type (required | optional); the cooldown
+    controls also take settings = { cool_down_period, packages_to_exempt_in_cooldown_check }.
   EOT
-  type = list(object({                                              # ordered list, one object per control → github_checks.controls[*]
-    control = string                                                # control name, one of the ten listed above → controls[*].control (required)
-    enable  = optional(bool, true)                                  # true = the control runs | false = listed but switched off → controls[*].enable; default: true
-    type    = optional(string, "required")                          # required = runs inside the check that can block merging | optional = runs inside the advisory check → controls[*].type; default: "required"
-    settings = optional(object({                                    # cooldown tuning; only the four "* Package Cooldown" controls read it → controls[*].settings; default: null (provider defaults)
-      cool_down_period                     = optional(number)       # days a newly published package version must be public before the check accepts it → settings.cool_down_period; default: null (provider default: 2)
-      packages_to_exempt_in_cooldown_check = optional(list(string)) # package names the cooldown never applies to, e.g. ["@acme/internal-sdk"] → settings.packages_to_exempt_in_cooldown_check; default: null (none)
-    }))
-  }))
-  default = [                                                                   # conservative baseline: cooldowns + PWN request block merging, script injection only warns
-    { control = "NPM Package Cooldown", settings = { cool_down_period = 3 } },  # fail the PR when it adds or bumps an npm package to a version published < 3 days ago (malicious versions are usually pulled within days); enable = true and type = "required" by default
-    { control = "PyPI Package Cooldown", settings = { cool_down_period = 3 } }, # the same 3-day cooldown for Python packages from PyPI
-    { control = "PWN Request" },                                                # fail when a workflow lets untrusted pull-request code run with write permissions (pull_request_target + checkout of the PR head)
-    { control = "Script Injection", type = "optional" },                        # warn (advisory check only) when a workflow pastes untrusted input (issue titles, branch names, PR bodies, ...) straight into a run: script
-    # { control = "Maven Package Cooldown", settings = { cool_down_period = 2, packages_to_exempt_in_cooldown_check = ["com.acme:sdk"] } }, # optional: Java/Maven cooldown with an exempt package
-    # { control = "NuGet Package Cooldown" },                                  # optional: .NET/NuGet cooldown (cool_down_period falls back to the provider's 2 days)
-    # { control = "NPM Package Compromised Updates" },                         # optional: fail when an npm update pulls a version StepSecurity flagged as compromised (PyPI/Maven/NuGet variants exist)
-    # { control = "Script Injection", enable = false },                        # optional: keep an entry in the list but switch the control off
+  type        = any                                                                                               # a plain list; each item is { control, enable, type, settings = {...} } (see the default below)
+  default = [                                                                                                     # conservative baseline: cooldowns + PWN request block merging, script injection only warns
+    { control = "NPM Package Cooldown", enable = true, type = "required", settings = { cool_down_period = 3 } },  # fail the PR when it adds or bumps an npm package to a version published < 3 days ago (malicious versions are usually pulled within days); enable = true and type = "required" by default
+    { control = "PyPI Package Cooldown", enable = true, type = "required", settings = { cool_down_period = 3 } }, # the same 3-day cooldown for Python packages from PyPI
+    { control = "PWN Request", enable = true, type = "required" },                                                # fail when a workflow lets untrusted pull-request code run with write permissions (pull_request_target + checkout of the PR head)
+    { control = "Script Injection", enable = true, type = "optional" },                                           # warn (advisory check only) when a workflow pastes untrusted input (issue titles, branch names, PR bodies, ...) straight into a run: script
+    # { control = "Maven Package Cooldown", enable = true, type = "required", settings = { cool_down_period = 2, packages_to_exempt_in_cooldown_check = ["com.acme:sdk"] } }, # optional: Java/Maven cooldown with an exempt package
+    # { control = "NuGet Package Cooldown", enable = true, type = "required" },                                  # optional: .NET/NuGet cooldown (cool_down_period falls back to the provider's 2 days)
+    # { control = "NPM Package Compromised Updates", enable = true, type = "required" },                         # optional: fail when an npm update pulls a version StepSecurity flagged as compromised (PyPI/Maven/NuGet variants exist)
+    # { control = "Script Injection", enable = false, type = "optional" },                        # optional: keep an entry in the list but switch the control off
   ]
   # Override in terraform.tfvars (replaces the whole list); for one org only, set checks["<org>"].controls instead.
 }
@@ -204,7 +198,7 @@ variable "default_notification_email" {
 # rejected by the provider at plan time.
 variable "default_notification_events" {
   description = "Event → on/off baseline; a notifications entry's `events` map is merged over this." # help text
-  type        = map(bool)                                                                            # event name → true (notify) | false (stay quiet)
+  type        = any                                                                                  # a plain map of event name => true/false
   # One line per event; the trailing comment says what triggers it.
   default = {                                     # security-relevant events on, per-run noise off
     domain_blocked                        = true  # Harden-Runner dropped an outbound call under a "block" egress policy: a job tried to reach an endpoint outside its allow-list (usually the first sign a build tool needs a new endpoint)
@@ -245,13 +239,9 @@ variable "default_notification_events" {
 # (OAuth) needs no webhook: set notifications["<org>"].slack_channel_id instead.
 variable "notification_webhooks" {
   description = "Per-org Slack/Teams webhook URLs, keyed by org. Supply via git-ignored secrets.auto.tfvars or TF_VAR_notification_webhooks." # help text
-  # Shape of one entry; both attributes are optional, leave out the one an org does not use.
-  type = map(object({                    # key = GitHub org name, must equal the notifications key → org_notification_settings.notification_channels
-    slack_webhook_url = optional(string) # Slack incoming-webhook URL (https://hooks.slack.com/services/...) → notification_channels.slack_webhook_url; default: null (no Slack webhook delivery)
-    teams_webhook_url = optional(string) # Microsoft Teams incoming-webhook URL → notification_channels.teams_webhook_url; default: null (no Teams delivery)
-  }))
-  default   = {}   # no webhooks anywhere; fill it from examples/secrets.auto.tfvars.example (copy to stepsecurity/secrets.auto.tfvars, which .gitignore excludes) or in CI: export TF_VAR_notification_webhooks='{"acme-corp":{"slack_webhook_url":"https://..."}}'
-  sensitive = true # plan/apply print "(sensitive value)" instead of the URLs; they are still written to the state file, so protect the state bucket
+  type        = any                                                                                                                           # a plain map: org name => { slack_webhook_url = "...", teams_webhook_url = "..." }, either URL may be left out
+  default     = {}                                                                                                                            # no webhooks anywhere; fill it from examples/secrets.auto.tfvars.example (copy to stepsecurity/secrets.auto.tfvars, which .gitignore excludes) or in CI: export TF_VAR_notification_webhooks='{"acme-corp":{"slack_webhook_url":"https://..."}}'
+  sensitive   = true                                                                                                                          # plan/apply print "(sensitive value)" instead of the URLs; they are still written to the state file, so protect the state bucket
   # nullable  = false # optional: reject `notification_webhooks = null` so notifications.tf's try() always sees a map (default: true; null is already handled by try())
   # ephemeral = true  # NOT usable here: the URLs feed a regular resource attribute, and ephemeral values may only feed provider config or write-only arguments
 }

@@ -62,10 +62,10 @@ default_notification_email = "security@example.com" # inbox for every notificati
 # ]
 
 # default_check_controls = [                                                   # optional: PR-check controls for any `checks` entry without its own `controls` list (default below; an override replaces the whole list)
-#   { control = "NPM Package Cooldown", settings = { cool_down_period = 3 } },  #   required: fail when the PR adds or bumps an npm package to a version published < 3 days ago (enable = true, type = "required" by default)
-#   { control = "PyPI Package Cooldown", settings = { cool_down_period = 3 } }, #   required: the same 3-day cooldown for PyPI packages
-#   { control = "PWN Request" },                                                #   required: a workflow lets untrusted PR code run with write permissions (pull_request_target + checkout of the PR head)
-#   { control = "Script Injection", type = "optional" },                        #   optional (advisory): untrusted input (issue titles, branch names, ...) pasted into a run: script
+#   { enable = true, type = "required", control = "NPM Package Cooldown", settings = { cool_down_period = 3 } },  #   required: fail when the PR adds or bumps an npm package to a version published < 3 days ago (enable = true, type = "required" by default)
+#   { enable = true, type = "required", control = "PyPI Package Cooldown", settings = { cool_down_period = 3 } }, #   required: the same 3-day cooldown for PyPI packages
+#   { enable = true, type = "required", control = "PWN Request" },                                                #   required: a workflow lets untrusted PR code run with write permissions (pull_request_target + checkout of the PR head)
+#   { enable = true, control = "Script Injection", type = "optional" },                        #   optional (advisory): untrusted input (issue titles, branch names, ...) pasted into a run: script
 # ]
 
 # default_notification_events = {                # optional: on/off baseline for the 15 event types; a notifications entry's `events` map is merged over it (default below; an override replaces the whole map)
@@ -352,9 +352,9 @@ checks = {
     custom_description = "Checks by StepSecurity. Contact: #security on Slack." # free text appended to every check summary — tell developers where to ask (default: null)
     # controls omitted → var.default_check_controls (NPM + PyPI cooldown 3 days, PWN Request required, Script Injection optional). To override for this org only:
     # controls = [                                                                                                                       # optional: which controls run and in which check (default: null → var.default_check_controls)
-    #   { control = "NPM Package Cooldown", settings = { cool_down_period = 5, packages_to_exempt_in_cooldown_check = ["@acme/sdk"] } }, #   cooldown controls take settings: days a new version must age (provider default: 2) and packages never held back
-    #   { control = "PyPI Package Cooldown", settings = { cool_down_period = 5 } },                                                      #   enable defaults to true, type to "required"
-    #   { control = "Maven Package Cooldown" },                                                                                          #   other names: "NuGet Package Cooldown", "NPM Package Compromised Updates" (also PyPI / Maven / NuGet), "PWN Request", "Script Injection"
+    #   { enable = true, type = "required", control = "NPM Package Cooldown", settings = { cool_down_period = 5, packages_to_exempt_in_cooldown_check = ["@acme/sdk"] } }, #   cooldown controls take settings: days a new version must age (provider default: 2) and packages never held back
+    #   { enable = true, type = "required", control = "PyPI Package Cooldown", settings = { cool_down_period = 5 } },                                                      #   enable defaults to true, type to "required"
+    #   { enable = true, type = "required", control = "Maven Package Cooldown" },                                                                                          #   other names: "NuGet Package Cooldown", "NPM Package Compromised Updates" (also PyPI / Maven / NuGet), "PWN Request", "Script Injection"
     #   { control = "Script Injection", enable = true, type = "optional" },                                                              #   type = required (blocks merging) | optional (advisory); enable = false keeps the entry but switches it off
     # ]
     required_checks = { repos = ["*"] }                           # where the merge-blocking (type = "required") controls run; ["*"] = every repo in the org (repos is required inside)
@@ -367,7 +367,7 @@ checks = {
   "acme-labs" = {
     optional_checks = { repos = ["*"] } # where the advisory (type = "optional") controls run; ["*"] = every repo (repos is required inside; omit_repos = [...] is allowed with "*")
     # custom_description = "Lab checks are advisory. Contact: #labs on Slack." # optional: text appended to every check summary (default: null)
-    # controls           = [{ control = "Script Injection", type = "optional" }] # optional: this org's own control list (default: null → var.default_check_controls)
+    # controls           = [{ enable = true, control = "Script Injection", type = "optional" }] # optional: this org's own control list (default: null → var.default_check_controls)
     # required_checks    = { repos = ["*"], omit_repos = ["scratch"] }         # optional: where the merge-blocking controls run (default: null = nowhere)
     # baseline_check     = { repos = ["*"] }                                   # optional: where the baseline check runs (default: null = nowhere)
   }

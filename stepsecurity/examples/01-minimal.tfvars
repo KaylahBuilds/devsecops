@@ -42,10 +42,10 @@ default_egress_policy = "audit" # mode for egress policies that omit egress_poli
 # ]
 
 # default_check_controls = [                                                   # optional: controls for any `checks` entry without its own `controls` list (default below)
-#   { control = "NPM Package Cooldown", settings = { cool_down_period = 3 } },  #   required: fail when an npm package was published less than 3 days ago
-#   { control = "PyPI Package Cooldown", settings = { cool_down_period = 3 } }, #   required: same for PyPI
-#   { control = "PWN Request" },                                                #   required: pull_request_target misuse
-#   { control = "Script Injection", type = "optional" },                        #   optional (non-blocking): untrusted input interpolated into run: scripts
+#   { enable = true, type = "required", control = "NPM Package Cooldown", settings = { cool_down_period = 3 } },  #   required: fail when an npm package was published less than 3 days ago
+#   { enable = true, type = "required", control = "PyPI Package Cooldown", settings = { cool_down_period = 3 } }, #   required: same for PyPI
+#   { enable = true, type = "required", control = "PWN Request" },                                                #   required: pull_request_target misuse
+#   { enable = true, control = "Script Injection", type = "optional" },                        #   optional (non-blocking): untrusted input interpolated into run: scripts
 # ]
 
 # default_notification_email = "sec@example.com" # optional: email for `notifications` entries that omit `email` (default: null = no email)
@@ -117,9 +117,9 @@ checks = {
     required_checks = { repos = ["*"] } # run the "required" check on these repos; "*" = every repo in the org
     # custom_description = "Questions? Ask #security on Slack."                       # optional: text appended to every check summary (default: null)
     # controls = [                                                                     # optional: which controls run and in which check type (default: null -> var.default_check_controls)
-    #   { control = "NPM Package Cooldown", settings = { cool_down_period = 5, packages_to_exempt_in_cooldown_check = ["lodash"] } }, # settings only apply to the cooldown controls; cool_down_period in days (provider default: 2)
-    #   { control = "PyPI Package Cooldown", settings = { cool_down_period = 5 } },      # enable defaults to true, type to "required"
-    #   { control = "Maven Package Cooldown" },                                          # other names: "NuGet Package Cooldown", "NPM|PyPI|Maven|NuGet Package Compromised Updates", "PWN Request", "Script Injection"
+    #   { enable = true, type = "required", control = "NPM Package Cooldown", settings = { cool_down_period = 5, packages_to_exempt_in_cooldown_check = ["lodash"] } }, # settings only apply to the cooldown controls; cool_down_period in days (provider default: 2)
+    #   { enable = true, type = "required", control = "PyPI Package Cooldown", settings = { cool_down_period = 5 } },      # enable defaults to true, type to "required"
+    #   { enable = true, type = "required", control = "Maven Package Cooldown" },                                          # other names: "NuGet Package Cooldown", "NPM|PyPI|Maven|NuGet Package Compromised Updates", "PWN Request", "Script Injection"
     #   { control = "Script Injection", enable = true, type = "optional" },              # type = required (blocks merge) | optional (informational); enable = false keeps the entry but turns it off
     # ]
     # required_checks = { repos = ["*"], omit_repos = ["sandbox"] }                    # omit_repos is only valid when repos = ["*"]

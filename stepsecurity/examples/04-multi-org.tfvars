@@ -96,16 +96,16 @@ base_allowed_endpoints = [
 #     type = required (blocks merge) | optional (informational) (default: required),
 #     settings only for the cooldown controls.
 default_check_controls = [
-  { control = "NPM Package Cooldown", settings = { cool_down_period = 5 } },   # fail when an npm package version was published < 5 days ago (provider default period: 2 days)
-  { control = "PyPI Package Cooldown", settings = { cool_down_period = 5 } },  # same for PyPI
-  { control = "Maven Package Cooldown", settings = { cool_down_period = 7 } }, # same for Maven Central (Java); not in the module default
-  { control = "NuGet Package Cooldown", settings = { cool_down_period = 7 } }, # same for NuGet (.NET); not in the module default
-  { control = "NPM Package Compromised Updates" },                             # fail when an npm update pulls a version StepSecurity flagged as compromised
-  { control = "PyPI Package Compromised Updates" },                            # same for PyPI ("Maven Package Compromised Updates" / "NuGet Package Compromised Updates" exist too)
-  { control = "PWN Request" },                                                 # pull_request_target that checks out untrusted PR code
-  { control = "Script Injection", type = "required" },                         # untrusted input interpolated into run: scripts; required here (module default: optional)
+  { enable = true, type = "required", control = "NPM Package Cooldown", settings = { cool_down_period = 5 } },   # fail when an npm package version was published < 5 days ago (provider default period: 2 days)
+  { enable = true, type = "required", control = "PyPI Package Cooldown", settings = { cool_down_period = 5 } },  # same for PyPI
+  { enable = true, type = "required", control = "Maven Package Cooldown", settings = { cool_down_period = 7 } }, # same for Maven Central (Java); not in the module default
+  { enable = true, type = "required", control = "NuGet Package Cooldown", settings = { cool_down_period = 7 } }, # same for NuGet (.NET); not in the module default
+  { enable = true, type = "required", control = "NPM Package Compromised Updates" },                             # fail when an npm update pulls a version StepSecurity flagged as compromised
+  { enable = true, type = "required", control = "PyPI Package Compromised Updates" },                            # same for PyPI ("Maven Package Compromised Updates" / "NuGet Package Compromised Updates" exist too)
+  { enable = true, type = "required", control = "PWN Request" },                                                 # pull_request_target that checks out untrusted PR code
+  { enable = true, control = "Script Injection", type = "required" },                                            # untrusted input interpolated into run: scripts; required here (module default: optional)
   # { control = "Maven Package Compromised Updates", enable = false },                                                    # optional: enable = false keeps the entry but turns the control off (default: true)
-  # { control = "NPM Package Cooldown", settings = { cool_down_period = 5, packages_to_exempt_in_cooldown_check = ["lodash"] } }, # optional: exempt named packages from the cooldown (default: none)
+  # { enable = true, type = "required", control = "NPM Package Cooldown", settings = { cool_down_period = 5, packages_to_exempt_in_cooldown_check = ["lodash"] } }, # optional: exempt named packages from the cooldown (default: none)
 ]
 
 # (4) Email for any `notifications` entry that omits `email`. acme-prod
@@ -373,13 +373,13 @@ checks = {
   # cooldowns so fresher packages can be tested, the in-house UI kit exempt,
   # Script Injection informational only.
   "acme-staging" = {
-    controls = [                                                                                                                          # overrides var.default_check_controls for this org
-      { control = "NPM Package Cooldown", settings = { cool_down_period = 2, packages_to_exempt_in_cooldown_check = ["@acme/ui-kit"] } }, # 2-day cooldown; the in-house package is released to staging the same day
-      { control = "PyPI Package Cooldown", settings = { cool_down_period = 2 } },                                                         # 2-day cooldown for PyPI
-      { control = "NPM Package Compromised Updates" },                                                                                    # enable defaults to true, type to "required"
-      { control = "PyPI Package Compromised Updates" },                                                                                   # same for PyPI
-      { control = "PWN Request" },                                                                                                        # pull_request_target misuse
-      { control = "Script Injection", type = "optional" },                                                                                # type = required (blocks merge) | optional (informational)
+    controls = [                                                                                                                                                            # overrides var.default_check_controls for this org
+      { enable = true, type = "required", control = "NPM Package Cooldown", settings = { cool_down_period = 2, packages_to_exempt_in_cooldown_check = ["@acme/ui-kit"] } }, # 2-day cooldown; the in-house package is released to staging the same day
+      { enable = true, type = "required", control = "PyPI Package Cooldown", settings = { cool_down_period = 2 } },                                                         # 2-day cooldown for PyPI
+      { enable = true, type = "required", control = "NPM Package Compromised Updates" },                                                                                    # enable defaults to true, type to "required"
+      { enable = true, type = "required", control = "PyPI Package Compromised Updates" },                                                                                   # same for PyPI
+      { enable = true, type = "required", control = "PWN Request" },                                                                                                        # pull_request_target misuse
+      { enable = true, control = "Script Injection", type = "optional" },                                                                                                   # type = required (blocks merge) | optional (informational)
     ]
     required_checks = { repos = ["*"] } # merge-blocking check on every repo
     # custom_description = "..."                       # optional: (default: null)
@@ -390,13 +390,13 @@ checks = {
   # acme-sandbox: informational only. The controls all carry type = "optional"
   # so they run inside the optional check; nothing here can block a merge.
   "acme-sandbox" = {
-    custom_description = "Informational only - nothing in acme-sandbox blocks a merge."              # appended to every check summary
-    controls = [                                                                                     # overrides var.default_check_controls; every control is optional here
-      { control = "NPM Package Cooldown", type = "optional", settings = { cool_down_period = 1 } },  # 1-day cooldown, report only
-      { control = "PyPI Package Cooldown", type = "optional", settings = { cool_down_period = 1 } }, # same for PyPI
-      { control = "PWN Request", type = "optional" },                                                # report only
-      { control = "Script Injection", type = "optional" },                                           # report only
-      { control = "Maven Package Cooldown", enable = false, type = "optional" },                     # enable = false keeps the entry but turns the control off (default: true)
+    custom_description = "Informational only - nothing in acme-sandbox blocks a merge."                             # appended to every check summary
+    controls = [                                                                                                    # overrides var.default_check_controls; every control is optional here
+      { enable = true, control = "NPM Package Cooldown", type = "optional", settings = { cool_down_period = 1 } },  # 1-day cooldown, report only
+      { enable = true, control = "PyPI Package Cooldown", type = "optional", settings = { cool_down_period = 1 } }, # same for PyPI
+      { enable = true, control = "PWN Request", type = "optional" },                                                # report only
+      { enable = true, control = "Script Injection", type = "optional" },                                           # report only
+      { control = "Maven Package Cooldown", enable = false, type = "optional" },                                    # enable = false keeps the entry but turns the control off (default: true)
     ]
     optional_checks = { repos = ["*"] } # non-blocking check on every repo
     # required_checks = { repos = ["*"] } # optional: none in the sandbox (default: null)

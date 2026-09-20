@@ -76,6 +76,7 @@ environment variable from a repository secret.
 ## Commenting convention
 
 - Every code line carries a trailing comment or a comment line directly above it.
+- Inputs have no type declarations; `inputs.tf` documents each field with an example entry, and the provider validates values at plan time. PR-check controls always state `enable` and `type`.
 - Comments say what the line does and, for any field with choices, the allowed values and the default.
 - Optional settings the example does not use appear as commented-out lines in the place they would go, so uncommenting them is the whole change.
 - Each file's header says what it demonstrates and how to run it.

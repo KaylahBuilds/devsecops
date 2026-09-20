@@ -5,9 +5,11 @@ org, repo and policy — from one `terraform.tfvars`. Uses the official
 [`step-security/stepsecurity`](https://github.com/step-security/terraform-provider-stepsecurity)
 provider.
 
-Design rule: **no loops, no locals.** Each resource type is one flat map
-variable and one `for_each`. Every entry names its org (`owner`), or is keyed
-by org for per-org settings. Reading a `.tf` file is reading the provider docs.
+Design rule: **no loops, no locals, no type declarations.** Each resource
+type is one flat map variable (`type = any`) and one `for_each`; the fields an
+entry accepts are shown as a plain example above each variable in `inputs.tf`.
+Every entry names its org (`owner`), or is keyed by org for per-org settings.
+Reading a `.tf` file is reading the provider docs.
 
 ## Examples
 
@@ -22,7 +24,7 @@ shown as commented-out lines.
 ```
 variables.tf      Tenant-wide settings + defaults (auth, base egress endpoints,
                   default check controls, default notification events, webhooks)
-inputs.tf         One typed map variable per resource type — the shape of your config
+inputs.tf         One map variable per resource type, with a full example entry in the comment
 terraform.tfvars  Your orgs and policies — the only file you edit day to day
 
 policy_store.tf   egress_policies, egress_policy_attachments

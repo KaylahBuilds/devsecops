@@ -138,14 +138,14 @@ notifications = {} # email / Slack / Teams channels and which events fire per or
 # NOT exposed by this layout - present in the provider schema (v0.0.44) but
 # absent from the auto_remediation_options object type in inputs.tf. Terraform
 # rejects unknown attributes in a typed object, so using one of these means
-# adding it as an optional(...) attribute to that object type in inputs.tf; the
+# adding it to the example comment in inputs.tf to that object type in inputs.tf; the
 # resource in policy_driven_prs.tf passes the whole object through, so nothing
 # else changes:
 #   action_commit_map         = { "actions/checkout" = "<40-char sha>" } # map(string): pin an action to THIS commit instead of resolving its tag
 #   custom_actions_to_replace = { "actions/cache" = "acme-corp/cache" }  # map(string): original action -> your own replacement action
 #   labels_to_replace         = { "self-hosted" = "ubuntu-latest" }     # map(string): disallowed runs-on label -> allowed label; opens a PR/issue swapping them
 #   add_workflows             = "<workflow yaml>"                        # string: extra workflow file(s) to add as part of the PR
-#   update_precommit_file     = [".pre-commit-config.yaml"]              # list(string): pre-commit config files the PR updates (shows as [] in the plan: the provider computes it when unset)
+#   update_precommit_file     = [".pre-commit-config.yaml"]              # a list of pre-commit config paths to update
 #   custom_precommit_config   = "<pre-commit yaml>"                      # string: custom pre-commit config (documented for newer provider releases; not in the v0.0.44 schema dump - check `terraform providers schema -json` before adding it)
 policy_driven_prs = {
   # acme-corp: every repo carrying the "production" topic, except the two listed, one PR per repo.

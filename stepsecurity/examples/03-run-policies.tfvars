@@ -63,10 +63,10 @@
 # ]
 
 # default_check_controls = [                                                   # optional: controls for any `checks` entry without its own `controls` list (default below) - see 04-multi-org.tfvars
-#   { control = "NPM Package Cooldown", settings = { cool_down_period = 3 } },  #   required: fail when an npm package was published less than 3 days ago
-#   { control = "PyPI Package Cooldown", settings = { cool_down_period = 3 } }, #   required: same for PyPI
-#   { control = "PWN Request" },                                                #   required: pull_request_target misuse
-#   { control = "Script Injection", type = "optional" },                        #   optional (non-blocking): untrusted input interpolated into run: scripts
+#   { enable = true, type = "required", control = "NPM Package Cooldown", settings = { cool_down_period = 3 } },  #   required: fail when an npm package was published less than 3 days ago
+#   { enable = true, type = "required", control = "PyPI Package Cooldown", settings = { cool_down_period = 3 } }, #   required: same for PyPI
+#   { enable = true, type = "required", control = "PWN Request" },                                                #   required: pull_request_target misuse
+#   { enable = true, control = "Script Injection", type = "optional" },                        #   optional (non-blocking): untrusted input interpolated into run: scripts
 # ]
 
 # default_notification_email = "sec@example.com" # optional: email for `notifications` entries that omit `email` (default: null = no email) - see 07-notifications-and-suppressions.tfvars
