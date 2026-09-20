@@ -14,6 +14,58 @@ Reading a `.tf` file is reading the provider docs.
 Operating procedures, SAST/DAST positioning, GitHub Advanced Security and
 Woodpecker CI notes are in [RUNBOOK.md](RUNBOOK.md).
 
+## Onboarding orgs and repos with shared defaults
+
+`organizations.tf` plus `modules/org/` stamp one standard set of controls onto
+every repo you list, per org:
+
+| Control | Resource created | Scope |
+|---|---|---|
+| Harden-Runner egress policy + attachment | `stepsecurity_github_policy_store` / `_attachment` | one per repo |
+| Harden-Runner required in every job | `stepsecurity_github_run_policy` | one per repo |
+| Pinning guard: SHA-pinned, allowed actions only | `stepsecurity_github_run_policy` | one per repo |
+| Compromised-actions block | `stepsecurity_github_run_policy` | one per org, all repos |
+| PR checks (package cooldown, PWN request, script injection) | `stepsecurity_github_checks` | one per org, `required` on the repo list |
+| Remediation PRs: harden-runner, pinned SHAs, Dependabot | `stepsecurity_policy_driven_pr` | one per org, on the repo list |
+| Notifications | `stepsecurity_github_org_notification_settings` | one per org when an email is set |
+
+Four layers, each a plain map, later wins:
+
+1. `var.defaults` in `organizations.tf`: the full standard. Leave it alone.
+2. `tenant_settings` in `terraform.tfvars`: any default key, for the whole tenant.
+3. `organizations["<org>"].settings`: any default key, for that org.
+4. `organizations["<org>"].repo_settings["<repo>"]`: the repo-level keys
+   (`egress_policy`, `allowed_endpoints`, `lockdown`, `workflows`,
+   `require_harden_runner`, `require_pinned_actions`, `allowed_actions`,
+   `actions_to_exempt_while_pinning`, `dry_run`) for that repo.
+
+**Add an org**: one entry.
+
+```hcl
+"acme-payments" = { repos = ["payments-api", "ledger"] }
+```
+
+**Add a repo**: one name in the org's `repos` list. It gets the org's
+settings and the tenant defaults.
+
+**Give a repo specifics**: one entry in `repo_settings`.
+
+```hcl
+repo_settings = {
+  "payments-api" = { egress_policy = "block", allowed_endpoints = ["api.stripe.com:443"] }
+}
+```
+
+`terraform.tfvars` shows four orgs and ten repos on the defaults, then a fifth
+org and three more repos being added. Nothing else changes: no new `.tf`,
+no new resource blocks.
+
+The flat maps (`egress_policies`, `run_policies`, `checks`, ...) still work
+for one-off resources outside the standard. Do not define an org-level
+singleton (`checks`, `notifications`, `policy_driven_prs`) through a flat map
+for an org that `organizations` already manages; StepSecurity keeps one per
+org and the two definitions would fight.
+
 ## Layout
 
 ```
@@ -21,6 +73,8 @@ variables.tf      Tenant-wide settings + defaults (auth, base egress endpoints,
                   default check controls, default notification events, webhooks)
 inputs.tf         One map variable per resource type, with a full example entry in the comment
 terraform.tfvars  Your orgs and policies — the only file you edit day to day
+organizations.tf  Shared-defaults onboarding: tenant defaults + module call per org
+modules/org/      The standard controls stamped onto each repo of one org
 
 policy_store.tf   egress_policies, egress_policy_attachments
 run_policies.tf   run_policies
