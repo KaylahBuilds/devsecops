@@ -16,6 +16,8 @@ stepsecurity/         Root module — StepSecurity tenant config (egress policie
                       RUNBOOK.md: operating procedures, SAST/DAST, GHAS, Woodpecker
                       run policies, PR checks, notifications, remediation PRs)
                       for every GitHub org/repo, driven by one terraform.tfvars
+containers/           Knowledge base + examples for image hardening and container
+                      security, with a phased timeline for sizing the work
 .github/workflows/
   terraform.yml       PR → fmt/validate/plan (dev+prod, commented on PR); main → apply
   stepsecurity.yml    Same gate for stepsecurity/; apply behind the `stepsecurity` environment

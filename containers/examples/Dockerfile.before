@@ -1,0 +1,14 @@
+# A typical first Dockerfile for a Node service. Every line below has a
+# problem; Dockerfile.hardened fixes each one. Do not build this for real.
+
+FROM node:latest                       # mutable tag; ~1 GB; full Debian with compilers and a shell
+ENV NPM_TOKEN=npm_xxxxxxxxxxxx         # secret baked into image history forever
+WORKDIR /app
+COPY . .                               # copies .git, .env, node_modules, test fixtures (no .dockerignore)
+RUN apt-get update && apt-get install -y curl \
+ && curl -fsSL https://example.com/install.sh | sh   # unverified remote script executed at build time
+RUN npm install                        # ignores the lockfile; resolves whatever is newest today
+EXPOSE 80                              # privileged port, so the process must run as root
+HEALTHCHECK CMD curl -f http://localhost/health || exit 1   # needs curl in the runtime image
+CMD npm start                          # shell form: PID 1 is /bin/sh, signals never reach node
+# (no USER line: runs as root)

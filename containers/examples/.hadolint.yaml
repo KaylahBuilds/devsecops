@@ -1,0 +1,22 @@
+# hadolint config for the CI lint step. Rules: https://github.com/hadolint/hadolint#rules
+failure-threshold: warning   # warnings and above fail the step once the gate is on
+
+ignored:
+  - DL3008   # "pin versions in apt-get install": the builder stage pins the base image by digest instead
+  - DL3059   # "multiple consecutive RUN": readability wins in the builder stage
+
+trustedRegistries:           # FROM must come from one of these
+  - docker.io
+  - gcr.io
+  - ghcr.io
+  - cgr.dev
+  - 123456789012.dkr.ecr.us-east-1.amazonaws.com
+
+override:
+  error:
+    - DL3007   # FROM :latest
+    - DL3002   # last USER is root
+    - DL4006   # pipe without set -o pipefail
+    - SC2086   # unquoted variables in RUN
+  warning:
+    - DL3025   # CMD/ENTRYPOINT in shell form

@@ -1,0 +1,146 @@
+# Build, scan, attest, sign and push a container image. Copy to
+# .github/workflows/ in the service repo. Pin every `uses:` to a commit SHA
+# before enabling (StepSecurity's remediation PRs will do it).
+name: Container security
+
+on:
+  pull_request:
+    paths: ["Dockerfile", "src/**", "package*.json"]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  lint:
+    name: Dockerfile lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+      - uses: actions/checkout@v4
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+
+  build:
+    name: Build, scan, sign
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write          # push to GHCR
+      id-token: write          # keyless cosign + provenance
+      security-events: write   # SARIF upload
+      attestations: write      # build provenance
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            ghcr.io:443
+            pkg-containers.githubusercontent.com:443
+            registry.npmjs.org:443
+            gcr.io:443
+            storage.googleapis.com:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+            objects.githubusercontent.com:443
+
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha,format=long
+            type=ref,event=branch
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      # Build locally first (load: true) so the scanner sees the exact image
+      # before anything is pushed.
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}:scan
+          labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            npmrc=${{ secrets.NPMRC }}
+          build-args: GIT_SHA=${{ github.sha }}
+
+      - name: Scan image (blocking on fixable critical/high)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:scan
+          trivy-config: trivy.yaml
+          format: sarif
+          output: trivy.sarif
+
+      - name: Upload findings to code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+
+      # Push only from main; PRs stop at the scan.
+      - id: push
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          secrets: |
+            npmrc=${{ secrets.NPMRC }}
+          build-args: GIT_SHA=${{ github.sha }}
+          sbom: true          # BuildKit attaches an SPDX SBOM attestation
+          provenance: mode=max
+
+      - name: SLSA build provenance attestation
+        if: github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - uses: sigstore/cosign-installer@v3
+        if: github.ref == 'refs/heads/main'
+
+      - name: Sign by digest (keyless, identity = this workflow on main)
+        if: github.ref == 'refs/heads/main'
+        run: cosign sign --yes "${IMAGE}@${{ steps.push.outputs.digest }}"
+
+      - name: Verify what we just signed
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cosign verify \
+            --certificate-identity "https://github.com/${{ github.repository }}/.github/workflows/container-security.yml@refs/heads/main" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${{ steps.push.outputs.digest }}"

@@ -1,0 +1,125 @@
+# Admission rules for app namespaces. Start with validationFailureAction: Audit,
+# read the PolicyReport, then switch to Enforce one namespace at a time.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-signed-images
+spec:
+  validationFailureAction: Audit
+  background: false
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  rules:
+    - name: verify-acme-images
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaceSelector:
+                matchLabels: { acme.io/tier: app }
+      verifyImages:
+        - imageReferences:
+            - "ghcr.io/acme/*"
+          mutateDigest: true            # rewrite tags to the verified digest
+          required: true
+          attestors:
+            - entries:
+                - keyless:
+                    subject: "https://github.com/acme/*/.github/workflows/container-security.yml@refs/heads/main"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: allowed-registries-and-no-latest
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: allowed-registries
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Images must come from ghcr.io/acme or the internal mirror."
+        pattern:
+          spec:
+            containers:
+              - image: "ghcr.io/acme/* | 123456789012.dkr.ecr.us-east-1.amazonaws.com/*"
+    - name: no-latest-tag
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Use a digest or an immutable tag, not :latest."
+        pattern:
+          spec:
+            containers:
+              - image: "!*:latest"
+---
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: pod-least-privilege
+spec:
+  validationFailureAction: Audit
+  background: true
+  rules:
+    - name: run-as-non-root
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Pods must set runAsNonRoot: true."
+        pattern:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+    - name: no-privileged-no-escalation
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "privileged and allowPrivilegeEscalation must be false; capabilities must be dropped."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  privileged: "false | null"
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: ["ALL"]
+    - name: no-host-namespaces-or-hostpath
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "hostNetwork, hostPID, hostIPC and hostPath are not allowed."
+        pattern:
+          spec:
+            =(hostNetwork): false
+            =(hostPID): false
+            =(hostIPC): false
+            =(volumes):
+              - X(hostPath): "null"
+    - name: require-limits
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+      validate:
+        message: "Every container needs CPU and memory limits."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"

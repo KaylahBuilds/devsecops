@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1.7
+# The same Node service, hardened. Numbers refer to knowledge/image-hardening.md.
+
+# ---- stage 1: build in a full image (2) ------------------------------------
+# Pinned by digest (3); the digest below is a placeholder, let Dependabot or
+# StepSecurity's secure_docker_file rewrite it to the real one.
+FROM node:22-bookworm-slim@sha256:0000000000000000000000000000000000000000000000000000000000000000 AS build
+
+WORKDIR /src
+
+# Lockfile first so the dependency layer caches independently of source (6).
+COPY package.json package-lock.json ./
+
+# Build-time credential via a BuildKit secret mount: never in a layer (5).
+RUN --mount=type=secret,id=npmrc,target=/root/.npmrc \
+    npm ci --omit=dev --ignore-scripts
+
+COPY . .
+RUN npm run build \
+ && npm prune --omit=dev
+
+# ---- stage 2: run in distroless (1) ----------------------------------------
+# No shell, no package manager, ships a `nonroot` user (uid 65532).
+FROM gcr.io/distroless/nodejs22-debian12:nonroot@sha256:0000000000000000000000000000000000000000000000000000000000000000
+
+# OCI labels make the image traceable to its source without the registry (7).
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.source="https://github.com/acme/api" \
+      org.opencontainers.image.revision="${GIT_SHA}" \
+      org.opencontainers.image.vendor="acme"
+
+WORKDIR /app
+
+# Only the artefacts, owned by the runtime user (4).
+COPY --from=build --chown=nonroot:nonroot /src/dist         ./dist
+COPY --from=build --chown=nonroot:nonroot /src/node_modules ./node_modules
+COPY --from=build --chown=nonroot:nonroot /src/package.json ./package.json
+
+# Unprivileged port so root is never needed (4).
+ENV PORT=8080 NODE_ENV=production
+EXPOSE 8080
+
+USER nonroot:nonroot
+
+# Exec form: node is PID 1 and receives SIGTERM (6). Distroless nodejs images
+# set the entrypoint to `node`; pass only the script.
+CMD ["dist/server.js"]
+
+# No HEALTHCHECK: distroless has no curl. Use a Kubernetes httpGet probe
+# (see pod-hardened.yaml) or ship a tiny health binary if you need one.

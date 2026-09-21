@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+dist
+*.env
+.env.*
+*.pem
+*.key
+coverage
+test/fixtures
+Dockerfile*
+docker-compose*.yml

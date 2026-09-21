@@ -1,0 +1,27 @@
+# Trivy config used by container-security.yml (`trivy image --config trivy.yaml`).
+severity:
+  - CRITICAL
+  - HIGH
+
+# Fail only on findings a fix exists for; unfixed CVEs are reported, not blocking.
+ignore-unfixed: true
+
+scan:
+  scanners:
+    - vuln
+    - secret
+    - misconfig
+
+vulnerability:
+  type:
+    - os
+    - library
+
+# Suppressions live next to the Dockerfile in .trivyignore, one CVE per line
+# with a reason and an expiry comment, e.g.
+#   # CVE-2024-12345 not reachable: package used only at build time. Expires 2026-12-31.
+#   CVE-2024-12345
+ignorefile: .trivyignore
+
+timeout: 10m
+exit-code: 1
