@@ -28,9 +28,8 @@ what actually delivers it here.
 | Secrets leaking into build logs or artifacts | Secrets detection (run policy + notifications) | `run_policies[*].policy.enable_secrets_policy`, events `secrets_detected`, `artifacts_secrets_detected` |
 | Automatic hardening PRs (pin SHAs, minimal `GITHUB_TOKEN`, add Harden-Runner, Dependabot, **CodeQL**, dependency review, Scorecard, Dockerfile digests) | Policy-driven PRs (secure-repo) | `policy_driven_prs`, `pr_templates` |
 | **SAST** (static analysis of your code) | **CodeQL / GitHub Advanced Security**, which StepSecurity installs and protects but does not perform | `policy_driven_prs` adds the workflow; GHAS licence runs it (see §5) |
-| **DAST** (probing a running app) | **Not a StepSecurity feature.** Use OWASP ZAP in a hardened job, or NodeZero which this repo already triggers | see §6 |
+| **DAST** (probing a running app) | **Not a StepSecurity feature.** Use OWASP ZAP in a hardened job | see §6 |
 | Runtime security in **Woodpecker CI** or any non-GitHub CI | **Not available.** Harden-Runner runs only on GitHub Actions runners (hosted, self-hosted, ARC) | see §7 |
-| Cloud posture (CSPM) | Prowler, already in `.github/workflows/security-scan.yml` | not StepSecurity |
 
 ---
 
@@ -42,7 +41,6 @@ stepsecurity/*.tf                    provider resources, one flat map each; no l
 stepsecurity/examples/               worked scenarios (examples branch)
 .github/workflows/stepsecurity.yml   PR → plan commented on the PR; merge → apply
 .github/workflows/terraform.yml      AWS infra; every job starts with harden-runner (audit)
-.github/workflows/security-scan.yml  Prowler weekly; NodeZero (DAST-class pentest) on demand
 ```
 
 Secrets: `STEP_SECURITY_API_KEY`, `STEP_SECURITY_CUSTOMER` and the optional
@@ -278,13 +276,8 @@ change the GHAS bill.
 
 ## 6. DAST
 
-StepSecurity has no dynamic testing. Two options already fit this repo.
-
-**NodeZero (Horizon3.ai)**, autonomous pentest, is wired into
-`security-scan.yml` as a manual trigger. It needs the `H3_API_KEY` secret, a
-template in the NodeZero portal, and written authorization for the target.
-Internal targets need a NodeZero runner inside the network; the GitHub job
-only starts the op.
+StepSecurity has no dynamic testing. The pattern below runs a scanner in a
+job that StepSecurity hardens.
 
 **OWASP ZAP baseline** for a deployed web app, run from GitHub Actions:
 
@@ -422,7 +415,6 @@ the on-call to use §3.9.
 | Egress reports, violations, detections | app.stepsecurity.io → the org |
 | Import IDs | `stepsecurity/README.md`, examples branch `examples/imports.tf.example` |
 | Worked configs | examples branch `stepsecurity/examples/` |
-| Prowler / NodeZero | `.github/workflows/security-scan.yml` |
 | Provider version | `stepsecurity/versions.tf` (`~> 0.0.44`) |
 
 Contacts to fill in: StepSecurity tenant owner, security on-call alias,

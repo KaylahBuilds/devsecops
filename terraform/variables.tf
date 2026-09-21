@@ -90,7 +90,7 @@ variable "enable_dns_hostnames" {
 }
 
 variable "map_public_ip_on_launch" {
-  description = "Auto-assign public IPs in public subnets (keep false; Prowler flags it on)"
+  description = "Auto-assign public IPs in public subnets (keep false)"
   type        = bool
   default     = false
 }
@@ -122,7 +122,7 @@ variable "one_nat_gateway_per_az" {
 # ---------------------------------------------------------------------------
 
 variable "enable_flow_logs" {
-  description = "Enable VPC flow logs to CloudWatch (recommended — Prowler will flag it off)"
+  description = "Enable VPC flow logs to CloudWatch (recommended)"
   type        = bool
   default     = true
 }
@@ -144,7 +144,7 @@ variable "flow_log_retention_days" {
   default     = 90
 
   validation {
-    condition = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.flow_log_retention_days)
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.flow_log_retention_days)
     error_message = "flow_log_retention_days must be a valid CloudWatch retention value."
   }
 }
