@@ -41,7 +41,8 @@ are pinned by digest and bumped by bot PRs.
 | SBOM generation and attestation on every build | S per pipeline | BuildKit `sbom: true` or Syft; attach with cosign |
 | Keyless signing with cosign via GitHub OIDC | M | one-time trust setup, then a step per pipeline. Decide identity: the workflow file on the default branch |
 | SLSA provenance attestation | S | `actions/attest-build-provenance` |
-| Registry hygiene: immutable tags, retention, no anonymous pull | S | provider-specific |
+| Registry hygiene: immutable tags, retention, no anonymous pull | S | `examples/aws/ecr.tf` or `examples/azure/acr.tf`; ACR tags stay mutable, so lock release tags in the workflow |
+| Cloud identity for push and deploy (OIDC, no static credentials) | S | same Terraform files; the deploy role/identity is scoped to tagged hosts only |
 | Private base image mirror or Chainguard/Distroless subscription decision | M | a procurement conversation; start it in week 1 |
 
 Exit: every image the pipeline pushes carries an SBOM, provenance and a
@@ -55,6 +56,8 @@ the daemon.
 | Task | Effort | Notes |
 |---|---|---|
 | Deploy wrapper: cosign verify, pull by digest, compose up | S | `verify-and-deploy.sh`; the only path allowed to start production containers |
+| Remote execution without SSH: SSM Run Command (AWS) or VM Run Command (Azure), hosts selected by tag | S per host group | `examples/aws/deploy-ssm.sh`, `examples/azure/deploy-run-command.sh`; needs the agent and an instance/VM identity with registry pull and secret read |
+| Secrets delivered as files at deploy time from Secrets Manager / Key Vault | S per service | the deploy scripts do it; rotation is the M-sized follow-up |
 | Compose files reference digests, never tags | S per service | bot PRs bump them |
 | Hardened `daemon.json` rolled out with config management | M per host group | `daemon.json`; `userns-remap` is the one that breaks things (volume ownership), do it last |
 | Docker socket lockdown: no TCP listener, `docker` group emptied, no socket mounts into containers | M | every CI agent and monitoring tool that mounts the socket needs a replacement (socket proxy or API token) |

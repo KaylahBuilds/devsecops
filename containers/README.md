@@ -23,6 +23,8 @@ examples/
   docker-run.sh                  the same service as a single docker run command
   verify-and-deploy.sh           cosign verify, then pull by digest, then compose up
   trivy.yaml                     scanner config with severity gates and ignore file conventions
+  aws/                           ECR + EC2 Docker hosts: Terraform (registry, OIDC push/deploy roles), workflow, SSM deploy, Compose
+  azure/                         ACR + Azure VM Docker hosts: Terraform (registry, federated identity), workflow, Run Command deploy, Compose
 ```
 
 ## Effort scale used throughout

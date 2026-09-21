@@ -1,0 +1,156 @@
+# ../container-security.yml adapted for ACR and Azure VM Docker hosts. Pin every
+# `uses:` to a commit SHA before enabling.
+name: Container security (Azure)
+
+on:
+  pull_request:
+    paths: ["Dockerfile", "src/**", "package*.json"]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: acmecontainers.azurecr.io      # login_server output
+  IMAGE: acmecontainers.azurecr.io/acme/api
+  RESOURCE_GROUP: rg-acme-docker-hosts
+
+jobs:
+  build:
+    name: Build, scan, sign, push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write          # OIDC to Azure + keyless cosign
+      security-events: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+            gcr.io:443
+            storage.googleapis.com:443
+            login.microsoftonline.com:443
+            management.azure.com:443
+            acmecontainers.azurecr.io:443
+            acmecontainers.eastus.data.azurecr.io:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+
+      - uses: actions/checkout@v4
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: ACR login (token from the OIDC identity, no admin credentials)
+        run: az acr login --name "${REGISTRY%%.*}"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: type=sha,format=long
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}:scan
+          build-args: GIT_SHA=${{ github.sha }}
+
+      - name: Scan image (blocking on fixable critical/high)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:scan
+          trivy-config: trivy.yaml
+          format: sarif
+          output: trivy.sarif
+
+      - if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+
+      - id: push
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: GIT_SHA=${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - if: github.ref == 'refs/heads/main'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign by digest (keyless)
+        if: github.ref == 'refs/heads/main'
+        run: cosign sign --yes "${IMAGE}@${{ steps.push.outputs.digest }}"
+
+      # ACR tags are mutable; lock this release tag so it cannot be re-pointed.
+      - name: Lock the release tag
+        if: github.ref == 'refs/heads/main'
+        run: |
+          az acr repository update --name "${REGISTRY%%.*}" \
+            --image "acme/api:sha-${GITHUB_SHA}" --write-enabled false
+
+  deploy:
+    name: Deploy to Docker VMs via Run Command
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            login.microsoftonline.com:443
+            management.azure.com:443
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # The VMs already have deploy-run-command.sh (shipped by config management).
+      - name: Run deploy on every VM tagged role=docker
+        run: |
+          for VM in $(az vm list -g "$RESOURCE_GROUP" --query "[?tags.role=='docker'].name" -o tsv); do
+            echo "== $VM"
+            az vm run-command invoke -g "$RESOURCE_GROUP" -n "$VM" \
+              --command-id RunShellScript \
+              --scripts "/opt/acme/deploy-run-command.sh ${IMAGE}@${{ needs.build.outputs.digest }}" \
+              --query 'value[0].message' -o tsv | tee "run-$VM.log"
+            grep -q 'DEPLOY OK' "run-$VM.log" || { echo "::error::deploy failed on $VM"; exit 1; }
+          done

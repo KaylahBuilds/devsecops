@@ -1,0 +1,42 @@
+# docker-compose.hardened.yml with AWS logging. Secrets arrive as files in
+# ./secrets from deploy-ssm.sh; the image digest is rewritten by verify-and-deploy.sh.
+name: api
+
+services:
+  api:
+    image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/acme/api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    user: "65532:65532"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"     # the host's nginx/ALB target fronts it
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      DB_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    healthcheck:
+      test: ["CMD", "/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: awslogs             # host instance role needs logs:CreateLogStream/PutLogEvents
+      options:
+        awslogs-region: us-east-1
+        awslogs-group: /acme/api
+        awslogs-create-group: "false"   # create the group in Terraform with retention set
+        tag: "{{.Name}}/{{.ID}}"
+
+secrets:
+  db_password:
+    file: ./secrets/db_password

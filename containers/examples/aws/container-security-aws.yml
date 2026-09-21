@@ -1,0 +1,161 @@
+# ../container-security.yml adapted for ECR and EC2 Docker hosts. Pin every
+# `uses:` to a commit SHA before enabling.
+name: Container security (AWS)
+
+on:
+  pull_request:
+    paths: ["Dockerfile", "src/**", "package*.json"]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  IMAGE: 123456789012.dkr.ecr.us-east-1.amazonaws.com/acme/api   # repository_url output
+
+jobs:
+  build:
+    name: Build, scan, sign, push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write          # OIDC to AWS + keyless cosign
+      security-events: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            api.github.com:443
+            objects.githubusercontent.com:443
+            registry.npmjs.org:443
+            gcr.io:443
+            storage.googleapis.com:443
+            sts.us-east-1.amazonaws.com:443
+            api.ecr.us-east-1.amazonaws.com:443
+            123456789012.dkr.ecr.us-east-1.amazonaws.com:443
+            prod-us-east-1-starport-layer-bucket.s3.us-east-1.amazonaws.com:443
+            fulcio.sigstore.dev:443
+            rekor.sigstore.dev:443
+            tuf-repo-cdn.sigstore.dev:443
+
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: aws-actions/amazon-ecr-login@v2
+        id: ecr
+
+      - uses: docker/setup-buildx-action@v3
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: type=sha,format=long          # immutable repo: every push needs a new tag
+
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: ${{ env.IMAGE }}:scan
+          build-args: GIT_SHA=${{ github.sha }}
+
+      - name: Scan image (blocking on fixable critical/high)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:scan
+          trivy-config: trivy.yaml
+          format: sarif
+          output: trivy.sarif
+
+      - if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+
+      - id: push
+        if: github.ref == 'refs/heads/main'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: GIT_SHA=${{ github.sha }}
+          sbom: true
+          provenance: mode=max
+
+      - if: github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+
+      - if: github.ref == 'refs/heads/main'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign by digest (keyless)
+        if: github.ref == 'refs/heads/main'
+        run: cosign sign --yes "${IMAGE}@${{ steps.push.outputs.digest }}"
+
+      # ECR enhanced scanning runs on push; wait for its verdict as a second opinion.
+      - name: Wait for ECR scan
+        if: github.ref == 'refs/heads/main'
+        run: |
+          aws ecr wait image-scan-complete --repository-name acme/api --image-id imageDigest=${{ steps.push.outputs.digest }}
+          aws ecr describe-image-scan-findings --repository-name acme/api --image-id imageDigest=${{ steps.push.outputs.digest }} \
+            --query 'imageScanFindings.findingSeverityCounts' --output table
+
+  deploy:
+    name: Deploy to Docker hosts via SSM
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production        # add required reviewers here
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: step-security/harden-runner@v2
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            github.com:443
+            sts.us-east-1.amazonaws.com:443
+            ssm.us-east-1.amazonaws.com:443
+
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The hosts already have deploy-ssm.sh (shipped by config management);
+      # we only tell them which digest to verify and run.
+      - name: Run deploy on every host tagged role=docker
+        run: |
+          CMD_ID=$(aws ssm send-command \
+            --document-name AWS-RunShellScript \
+            --targets Key=tag:role,Values=docker \
+            --comment "deploy ${GITHUB_SHA}" \
+            --parameters "commands=[\"/opt/acme/deploy-ssm.sh ${IMAGE}@${{ needs.build.outputs.digest }}\"]" \
+            --query Command.CommandId --output text)
+          echo "command $CMD_ID"
+          sleep 20
+          aws ssm list-command-invocations --command-id "$CMD_ID" --details \
+            --query 'CommandInvocations[].{host:InstanceId,status:Status,out:CommandPlugins[0].Output}' --output table
+          aws ssm list-command-invocations --command-id "$CMD_ID" \
+            --query 'CommandInvocations[?Status!=`Success`]' --output text | grep -q . && exit 1 || true
