@@ -14,9 +14,6 @@ override.tf.json
 *.auto.tfvars
 secrets.tfvars
 
-# Scan output
-prowler-output/
-output/
 
 # Editor
 .vscode/

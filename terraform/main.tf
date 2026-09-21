@@ -25,7 +25,7 @@ resource "aws_vpc" "core" {
   tags = { Name = "${local.name}-vpc" }
 }
 
-# Prowler flags permissive default SGs — strip all rules from ours.
+# A default SG with open rules is a common finding — strip all rules from ours.
 resource "aws_default_security_group" "core" {
   vpc_id = aws_vpc.core.id
   tags   = { Name = "${local.name}-default-sg-locked" }

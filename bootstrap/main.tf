@@ -165,22 +165,6 @@ resource "aws_iam_role_policy_attachment" "apply_power" {
   policy_arn = "arn:aws:iam::aws:policy/PowerUserAccess"
 }
 
-# Prowler needs SecurityAudit + ViewOnly per Prowler docs.
-resource "aws_iam_role" "prowler" {
-  name               = "${var.project}-github-prowler"
-  assume_role_policy = data.aws_iam_policy_document.assume_plan.json
-}
-
-resource "aws_iam_role_policy_attachment" "prowler_secaudit" {
-  role       = aws_iam_role.prowler.name
-  policy_arn = "arn:aws:iam::aws:policy/SecurityAudit"
-}
-
-resource "aws_iam_role_policy_attachment" "prowler_viewonly" {
-  role       = aws_iam_role.prowler.name
-  policy_arn = "arn:aws:iam::aws:policy/job-function/ViewOnlyAccess"
-}
-
 # State access shared by plan/apply roles.
 data "aws_iam_policy_document" "state_access" {
   statement {
@@ -234,9 +218,4 @@ output "plan_role_arn" {
 output "apply_role_arn" {
   value       = aws_iam_role.tf_apply.arn
   description = "GitHub secret AWS_APPLY_ROLE_ARN"
-}
-
-output "prowler_role_arn" {
-  value       = aws_iam_role.prowler.arn
-  description = "GitHub secret AWS_PROWLER_ROLE_ARN"
 }
