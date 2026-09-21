@@ -9,9 +9,9 @@ you run them and what you do with the output. Effort ratings per `../README.md`.
 |---|---|---|---|
 | hadolint | Dockerfile | `:latest`, root user, `apt` without cleanup, `curl \| sh`, secrets in `ARG` | anything about the resulting image |
 | Trivy / Grype | image | OS package CVEs, language dependency CVEs, secrets in layers, misconfig | zero-days, custom code bugs, runtime behaviour |
-| Trivy config / Checkov / kube-linter | manifests, Helm | privileged pods, missing limits, hostPath, missing probes | cluster-side reality (what is actually running) |
+| Trivy config / Checkov | Compose files | `privileged: true`, socket mounts, missing limits, `:latest`, secrets in `environment:` | host-side reality (what is actually running) |
 | Syft + Grype | SBOM | the same CVEs, but queryable across the fleet later | same as image scan |
-| Kyverno / Gatekeeper | admission | anything the manifest scanners find, at the last moment, plus signature and provenance | runtime |
+| verify-and-deploy.sh + Docker Bench | deploy time / host | signature and provenance at the last moment; daemon and container options on the host | runtime |
 | Falco / agent | runtime | behaviour: shells, unexpected network, file writes | vulnerabilities that are not exploited |
 
 ## Where to gate (S each, once the tool runs)
@@ -22,9 +22,9 @@ you run them and what you do with the output. Effort ratings per `../README.md`.
    the gate.
 3. **Registry**: scan on push as a second opinion; surfaces images built
    outside CI.
-4. **Admission**: signature, provenance, registry allow-list, no `:latest`.
-5. **Cluster, continuously**: rescan running images nightly; new CVEs
-   appear in old images.
+4. **Deploy**: signature, provenance, digest reference (`verify-and-deploy.sh`).
+5. **Hosts, continuously**: rescan running images nightly (`trivy image` over
+   `docker ps` output, or Docker Scout); new CVEs appear in old images.
 
 ## Noise control (S, revisit monthly)
 

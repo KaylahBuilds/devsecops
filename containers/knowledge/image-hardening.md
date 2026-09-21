@@ -17,7 +17,8 @@ the scale in `../README.md`.
 
 Rule: build in a full image, run in a distroless one. The runtime stage
 must not contain a package manager, a shell, or compilers. If you need a
-shell for debugging use `kubectl debug` with an ephemeral container.
+shell for debugging use `docker debug` (Docker Desktop / Scout) or start a
+sidecar that shares the PID namespace: `docker run --pid container:<id> ...`.
 
 ## 2. Multi-stage builds (S)
 
@@ -45,8 +46,9 @@ USER nonroot:nonroot
 ```
 
 Distroless images ship a `nonroot` user (uid 65532). Consequences you will
-hit: cannot bind ports below 1024 (use 8080), cannot write to `/` (mount an
-`emptyDir` for scratch space), file ownership must be set at `COPY` time.
+hit: cannot bind ports below 1024 (use 8080 and publish `-p 80:8080`),
+cannot write to `/` (use a `tmpfs` mount for scratch space), file ownership
+must be set at `COPY` time.
 
 ## 5. No secrets in the image (S)
 
@@ -67,8 +69,8 @@ Scan for leaks anyway (`trivy image --scanners secret`).
 - `rm -rf /var/lib/apt/lists/*` in the same `RUN` layer as `apt-get`.
 - `.dockerignore` with `.git`, `node_modules`, `*.env`, test data.
 - No `EXPOSE` of ports the process does not listen on; `HEALTHCHECK`
-  without `curl` (distroless has none): use the app's own health binary or
-  let Kubernetes probes do it.
+  without `curl` (distroless has none): use the runtime you already ship,
+  e.g. `node -e` with `fetch`, or a tiny static health binary.
 
 ## 7. Labels and metadata (S)
 

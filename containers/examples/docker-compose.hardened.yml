@@ -1,0 +1,86 @@
+# The hardened Node service under Docker Compose. Every security-relevant key
+# is set explicitly; numbers refer to knowledge/runtime-security.md section 3.
+name: api
+
+services:
+  api:
+    # Digest, never a tag; bumped by bot PRs. Placeholder digest below.
+    image: ghcr.io/acme/api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    user: "65532:65532"                       # distroless nonroot, even if the image forgot USER
+    read_only: true                           # immutable root filesystem
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m        # the only writable path
+    cap_drop:
+      - ALL                                   # add NET_BIND_SERVICE back only if binding < 1024
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    mem_limit: 256m
+    cpus: 0.5
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"                 # loopback only; the host reverse proxy fronts it
+    networks:
+      - frontend
+      - backend
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+    secrets:
+      - db_password                           # mounted at /run/secrets/db_password
+    healthcheck:                              # overrides/complements the image HEALTHCHECK
+      test: ["CMD", "/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-bookworm@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/postgresql                       # postgres needs its socket dir writable
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN                                 # the three postgres actually needs at start
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 512
+    mem_limit: 1g
+    networks:
+      - backend                               # internal network only: no route out, no published port
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+networks:
+  frontend: {}                                # reachable from the host proxy
+  backend:
+    internal: true                            # no external route; only members can talk
+
+volumes:
+  pgdata: {}
+
+secrets:
+  db_password:
+    file: ./secrets/db_password               # created at deploy time, never committed

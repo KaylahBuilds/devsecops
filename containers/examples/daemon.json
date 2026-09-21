@@ -1,0 +1,32 @@
+{
+  "no-new-privileges": true,
+  "icc": false,
+  "userland-proxy": false,
+  "live-restore": true,
+  "userns-remap": "default",
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  },
+  "default-ulimits": {
+    "nofile": {
+      "Name": "nofile",
+      "Hard": 65536,
+      "Soft": 65536
+    },
+    "nproc": {
+      "Name": "nproc",
+      "Hard": 4096,
+      "Soft": 4096
+    }
+  },
+  "registry-mirrors": [
+    "https://mirror.registry.example.internal"
+  ],
+  "hosts": [
+    "unix:///var/run/docker.sock"
+  ],
+  "storage-driver": "overlay2",
+  "data-root": "/var/lib/docker"
+}

@@ -45,18 +45,22 @@ even a bucket plus a script).
   unless referenced by a deployment.
 - Registry scanning on push as a second opinion to CI scanning.
 
-## 5. Admission: only admit what is proven (M policies, L rollout)
+## 5. Verify before deploy: only run what is proven (S script, M rollout)
 
-An admission controller (Kyverno, OPA Gatekeeper, or the cloud provider's
-Binary Authorization) checks every pod before scheduling:
+Docker Engine has no admission controller, so the gate is the deploy path.
+`../examples/verify-and-deploy.sh` is the only way production containers
+get started: it resolves the digest, runs `cosign verify` against the
+expected workflow identity, checks provenance, pulls by digest and then
+runs `docker compose up`. Compose files reference digests, never tags.
 
-- image is signed by the expected identity;
-- image carries provenance from an allowed builder;
-- image is from an allowed registry;
-- no `:latest`, digest present.
+Back it up on the daemon side: `daemon.json` can restrict which registries
+the engine pulls from (`registry-mirrors` plus blocking Docker Hub at the
+host firewall), and Docker Bench flags containers started from unsigned or
+tag-referenced images if you add that check to its config.
 
-`../examples/kyverno-policies.yaml` covers these. Run in **Audit** mode
-first; the audit report is the to-do list for the rollout.
+Docker Content Trust (Notary v1, `DOCKER_CONTENT_TRUST=1`) is the legacy
+built-in; it signs tags, not digests, and Docker has been winding it
+down. Use cosign.
 
 ## 6. Base image supply (M, mostly a decision)
 
@@ -66,20 +70,19 @@ Google Distroless (free, rebuilt often), Chainguard/Wolfi (patched daily,
 paid SLA), your own golden images (full control, full cost). The decision
 gates phase 2 of the timeline; start it in week one.
 
-## 7. Verifying in the deployment pipeline too (S)
+## 7. Make the verified path the only path (M)
 
-Admission control catches the cluster; verify in the CD step as well so
-a policy engine outage does not become a bypass:
-
-```bash
-cosign verify ... "$IMAGE@$DIGEST" && kubectl set image ...
-```
+A script nobody is forced to use is documentation. Remove the alternatives:
+humans lose the `docker` group (see `runtime-security.md`), the CD job is
+the only identity that can `docker compose up` on production hosts, and
+Compose files with a tag instead of a digest fail CI lint
+(`grep -E 'image: .*:[^@]+$'` is enough).
 
 ## Threats this addresses
 
 | Threat | Control |
 |---|---|
-| Registry compromise swaps an image | signature + digest pinning |
+| Registry compromise swaps an image | signature verified at deploy + digest pinning in Compose |
 | Malicious PR builds and pushes an image | identity restricted to the default-branch workflow; Harden-Runner egress block on the build job |
 | Upstream base image compromised | pinned digests, SBOM diff on bump PRs, scanning |
 | Dependency confusion during build | lockfiles with hashes, private registry mirror, egress allow-list |

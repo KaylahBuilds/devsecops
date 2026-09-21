@@ -46,5 +46,6 @@ USER nonroot:nonroot
 # set the entrypoint to `node`; pass only the script.
 CMD ["dist/server.js"]
 
-# No HEALTHCHECK: distroless has no curl. Use a Kubernetes httpGet probe
-# (see pod-hardened.yaml) or ship a tiny health binary if you need one.
+# Distroless has no curl, but it has node: use it for the healthcheck (6).
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD ["/nodejs/bin/node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
