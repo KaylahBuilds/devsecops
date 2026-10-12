@@ -1,0 +1,72 @@
+// Waybar: floating pill groups on a transparent bar (see style.css)
+{
+    "layer": "top",
+    "position": "top",
+    "height": 38,
+    "margin-top": 8,
+    "margin-left": 12,
+    "margin-right": 12,
+    "spacing": 6,
+
+    "modules-left":   ["group/left"],
+    "modules-center": ["clock"],
+    "modules-right":  ["group/right"],
+
+    "group/left": {
+        "orientation": "horizontal",
+        "modules": ["hyprland/workspaces", "custom/launcher", "custom/files", "custom/search", "custom/apps", "custom/clip"]
+    },
+    "group/right": {
+        "orientation": "horizontal",
+        "modules": ["custom/weather", "cpu", "memory", "pulseaudio", "backlight", "network", "bluetooth", "battery", "custom/power"]
+    },
+
+    "hyprland/workspaces": {
+        "format": "{icon}",
+        "format-icons": { "active": "", "default": "", "urgent": "" },
+        "persistent-workspaces": { "*": 5 },
+        "on-click": "activate"
+    },
+
+    "clock": {
+        "interval": 1,
+        "format": "{:%I:%M:%S %p   %a %d %b}",
+        "tooltip-format": "<tt>{calendar}</tt>"
+    },
+
+    "custom/launcher": { "format": "󰄛", "on-click": "rofi -show drun", "tooltip": false },
+    "custom/files":    { "format": "", "on-click": "thunar", "tooltip": false },
+    "custom/search":   { "format": "", "on-click": "rofi -show run", "tooltip": false },
+    "custom/apps":     { "format": "", "on-click": "rofi -show window", "tooltip": false },
+    "custom/clip":     { "format": "", "on-click": "cliphist list | rofi -dmenu | cliphist decode | wl-copy", "tooltip": false },
+
+    "custom/weather": {
+        "exec": "~/.config/waybar/scripts/weather.sh",
+        "interval": 900,
+        "return-type": "json"
+    },
+
+    "cpu":    { "format": " {usage}%", "interval": 5 },
+    "memory": { "format": " {percentage}%", "interval": 5 },
+
+    "pulseaudio": {
+        "format": "{icon} {volume}%",
+        "format-muted": "",
+        "format-icons": { "default": ["", "", ""] },
+        "on-click": "pavucontrol"
+    },
+    "backlight": { "format": "{icon} {percent}%", "format-icons": ["", "", ""] },
+    "network": {
+        "format-wifi": "",
+        "format-ethernet": "󰈀",
+        "format-disconnected": "󰖪",
+        "tooltip-format": "{essid} {ipaddr}"
+    },
+    "bluetooth": { "format": "", "format-disabled": "󰂲", "on-click": "blueman-manager" },
+    "battery": {
+        "format": "{icon} {capacity}%",
+        "format-charging": "󰂄 {capacity}%",
+        "format-icons": ["", "", "", "", ""]
+    },
+    "custom/power": { "format": "", "on-click": "wlogout", "tooltip": false }
+}

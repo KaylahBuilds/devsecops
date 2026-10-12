@@ -1,0 +1,17 @@
+# lazygit — stands in for the "GitArbor" pane on the right of the screenshot.
+gui:
+  nerdFontsVersion: "3"
+  showIcons: true
+  border: rounded
+  sidePanelWidth: 0.3
+  theme:
+    activeBorderColor:   ["#ffb86c", bold]
+    inactiveBorderColor: ["#6272a4"]
+    selectedLineBgColor: ["#2d2f3a"]
+    optionsTextColor:    ["#5ea1ff"]
+    unstagedChangesColor: ["#ff6e5e"]
+    defaultFgColor:      ["#ffffff"]
+git:
+  paging:
+    colorArg: always
+    pager: delta --dark --paging=never

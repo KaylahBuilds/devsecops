@@ -1,0 +1,24 @@
+local o = vim.opt
+o.number = true
+o.relativenumber = true      -- the editor in the screenshot shows relative numbers
+o.cursorline = true
+o.termguicolors = true
+o.signcolumn = "yes"
+o.wrap = true
+o.linebreak = true
+o.tabstop = 4
+o.shiftwidth = 4
+o.expandtab = true
+o.smartindent = true
+o.ignorecase = true
+o.smartcase = true
+o.splitright = true
+o.splitbelow = true
+o.scrolloff = 8
+o.updatetime = 200
+o.timeoutlen = 400
+o.clipboard = "unnamedplus"
+o.undofile = true
+o.showmode = false           -- lualine shows the mode
+o.laststatus = 3             -- single global statusline across splits
+o.fillchars = { eob = " " }

@@ -1,0 +1,44 @@
+/* Pill-shaped module groups floating over a blurred wallpaper */
+* {
+    font-family: "JetBrainsMono Nerd Font", sans-serif;
+    font-size: 13px;
+    min-height: 0;
+}
+
+window#waybar {
+    background: transparent;
+    color: #f8f8f2;
+}
+
+#clock,
+.modules-left > box,
+.modules-right > box {
+    background: rgba(10, 10, 16, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 20px;
+    padding: 0 12px;
+    margin: 0 4px;
+}
+
+#workspaces button {
+    padding: 0 3px;
+    color: #6272a4;
+    background: transparent;
+    border: none;
+}
+#workspaces button.active { color: #ffb86c; }
+#workspaces button.urgent { color: #ff5555; }
+
+#clock { font-weight: bold; padding: 0 16px; }
+
+#custom-launcher, #custom-files, #custom-search, #custom-apps, #custom-clip,
+#cpu, #memory, #pulseaudio, #backlight, #network, #bluetooth, #battery, #custom-power {
+    padding: 0 8px;
+}
+
+#custom-launcher { color: #f1fa8c; }
+#custom-weather  { color: #ffb86c; padding: 0 10px; }
+#battery.charging { color: #50fa7b; }
+#battery.warning:not(.charging) { color: #ffb86c; }
+#battery.critical:not(.charging) { color: #ff5555; }
+#custom-power { color: #ff79c6; }
